@@ -159,12 +159,67 @@ app.get("/", function (request, response) {
 /**
  * Create: Add a new page to the database
  */
+
+async function addNotionPageToDatabase(databaseId, pageProperties) {
+  const newPage = await notion.pages.create({
+    parent: {
+      database_id: databaseId,
+    },
+    properties: pageProperties,
+  });
+  return newPage;
+}
+const propertiesForNewPages = [
+  {
+    "Grocery item": {
+      type: "title",
+      title: [{ type: "text", text: { content: "Tomatoes" } }],
+    },
+    Price: {
+      type: "number",
+      number: 1.49,
+    },
+    "Last ordered": {
+      type: "date",
+      date: { start: "2023-05-11" },
+    },
+  },
+  {
+    "Grocery item": {
+      type: "title",
+      title: [{ type: "text", text: { content: "Lettuce" } }],
+    },
+    Price: {
+      type: "number",
+      number: 3.99,
+    },
+    "Last ordered": {
+      type: "date",
+      date: { start: "2023-05-04" },
+    },
+  },
+  {
+    "Grocery item": {
+      type: "title",
+      title: [{ type: "text", text: { content: "Oranges" } }],
+    },
+    Price: {
+      type: "number",
+      number: 0.99,
+    },
+    "Last ordered": {
+      type: "date",
+      date: { start: "2022-04-29" },
+    },
+  },
+];
 app.post("/databases", async function (request, response) {
   const pageId = process.env.NOTION_DATABASE_ID;
-  const title = "Form Fields";
+  const { name, description, date } = request.body;
 
   try {
-    const newDb = await notion.databases.create({
+    // Create a new database
+    const newDatabase = await notion.databases.create({
       parent: {
         type: "page_id",
         page_id: pageId,
@@ -173,19 +228,48 @@ app.post("/databases", async function (request, response) {
         {
           type: "text",
           text: {
-            content: title,
+            content: "Grocery list",
           },
         },
       ],
       properties: {
-        Name: {
+        // These properties represent columns in the database (i.e. its schema)
+        "Grocery item": {
+          type: "title",
           title: {},
+        },
+        Price: {
+          type: "number",
+          number: {
+            format: "dollar",
+          },
+        },
+        "Last ordered": {
+          type: "date",
+          date: {},
         },
       },
     });
-    response.json({ message: "success!", data: newDb });
+
+    // Print the new database's URL. Visit the URL in your browser to see the pages that get created in the next step.
+    console.log(newDatabase.url);
+
+    const databaseId = newDatabase.id;
+    // If there is no ID (if there's an error), return.
+    if (!databaseId) return;
+
+    console.log("Adding new pages...");
+    for (let i = 0; i < propertiesForNewPages.length; i++) {
+      // Add a few new pages to the database that was just created
+      await addNotionPageToDatabase(databaseId, propertiesForNewPages[i]);
+    }
+    return response.json({
+      message: "Database created successfully!",
+      data: newDatabase,
+    });
   } catch (error) {
-    response.json({ message: "error", error });
+    console.error("Error creating database:", error);
+    response.json({ message: "Error", error });
   }
 });
 
@@ -253,16 +337,42 @@ app.delete("/pages/:pageId", async function (request, response) {
   }
 });
 
+app.get("/get-database-schema", async function (req, res) {
+  const databaseId = process.env.NOTION_DATABASE_ID;
+
+  try {
+    const database = await notion.databases.retrieve({
+      database_id: databaseId,
+    });
+    res.json(database.properties); // This will show all properties (columns)
+  } catch (error) {
+    console.error("Error retrieving database schema:", error);
+    res.status(500).send("Error retrieving database schema");
+  }
+});
+
 app.post("/add-row", async function (request, response) {
   const databaseId = process.env.NOTION_DATABASE_ID;
   const { name, description, date } = request.body;
+  const title = "Shakil";
 
   try {
     // Create a new page (row) in the Notion database
     const newRow = await notion.pages.create({
-      parent: { database_id: databaseId },
+      parent: {
+        database_id: databaseId,
+      },
+      title: [
+        {
+          type: "text",
+          text: {
+            content: title,
+          },
+        },
+      ],
       properties: {
         Name: {
+          // Update with the correct property identifier
           title: [
             {
               text: {
@@ -272,6 +382,7 @@ app.post("/add-row", async function (request, response) {
           ],
         },
         Description: {
+          // Update with the correct property identifier
           rich_text: [
             {
               text: {
@@ -281,6 +392,7 @@ app.post("/add-row", async function (request, response) {
           ],
         },
         Date: {
+          // Update with the correct property identifier
           date: {
             start: date, // Date column (ISO 8601 date format)
           },
@@ -290,8 +402,18 @@ app.post("/add-row", async function (request, response) {
 
     response.json({ message: "Row added successfully!", data: newRow });
   } catch (error) {
+    console.log(error);
     response.json({ message: "error", error });
   }
+});
+app.get("/get_databases_id", async (req, res) => {
+  try {
+    const response = await notion.search({
+      query,
+      filter: { property: "object", value: "database" },
+    });
+    console.log(response.results);
+  } catch (error) {}
 });
 
 // Listen for requests
